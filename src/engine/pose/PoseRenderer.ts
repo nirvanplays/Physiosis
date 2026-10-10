@@ -14,7 +14,7 @@
 import type { Landmark } from '../../types/pose';
 import { LandmarkIndex, KEY_REHAB_LANDMARKS, POSE_CONNECTIONS } from '../../types/pose';
 import type { MovementState } from '../biomechanics/biomechanicsTypes';
-import type { LiveGuideOverlay } from '../exercise/ExerciseTypes';
+import type { LiveGuideOverlay, JointHighlight } from '../exercise/ExerciseTypes';
 
 const MIN_VISIBILITY = 0.40;
 
@@ -22,7 +22,7 @@ export interface RenderOverlayOptions {
   angle?: number | null;
   shoulderFlexionAngle?: number | null;
   movementState?: MovementState;
-  highlightJoint?: 'shoulder' | 'knee' | 'hip';
+  highlightJoint?: JointHighlight;
   targetAngle?: number;
   liveGuide?: LiveGuideOverlay | null;
   showTargetGuide?: boolean;
@@ -289,8 +289,8 @@ export class PoseRenderer {
     angleDeg: number,
     toScreen: (lm: Landmark) => { x: number; y: number; visible: boolean },
     movementState: MovementState,
-    highlightJoint: 'shoulder' | 'knee' | 'hip',
-    _targetAngle: number,
+    highlightJoint?: JointHighlight,
+    _targetAngle?: number,
   ): void {
     let ptOrigin: { x: number; y: number; visible: boolean } | null = null;
     let ptRef: { x: number; y: number; visible: boolean } | null = null;

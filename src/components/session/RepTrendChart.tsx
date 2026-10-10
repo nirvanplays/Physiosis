@@ -11,7 +11,7 @@ interface RepTrendChartProps {
   targetAngle?: number;
 }
 
-type ChartMetric = 'ROM' | 'SEVERITY';
+type ChartMetric = 'ROM' | 'IMPROVEMENT';
 
 export const RepTrendChart: React.FC<RepTrendChartProps> = ({
   reps,
@@ -22,7 +22,7 @@ export const RepTrendChart: React.FC<RepTrendChartProps> = ({
   if (!reps || reps.length === 0) {
     return (
       <div className="rep-trend-chart rep-trend-chart--empty">
-        <span>Complete a repetition to view trend graph.</span>
+        <span>Complete repetitions during an active session to view trend graph.</span>
       </div>
     );
   }
@@ -38,39 +38,49 @@ export const RepTrendChart: React.FC<RepTrendChartProps> = ({
   const chartH = height - padTop - padBottom;
 
   const isRom = metric === 'ROM';
-  const minY = 0;
-  const maxY = isRom ? 180 : 100;
+
+  // Improvement mode calculations
+  const maxImprovement = Math.max(30, ...reps.map((r) => Math.abs(r.improvementFromPrevious ?? 0)));
+  const minImprovement = -Math.max(20, ...reps.map((r) => Math.abs(r.improvementFromPrevious ?? 0)));
 
   const getX = (idx: number) => {
     if (reps.length === 1) return padLeft + chartW / 2;
     return padLeft + (idx / (reps.length - 1)) * chartW;
   };
 
-  const getY = (val: number) => {
-    const clamped = Math.max(minY, Math.min(maxY, val));
-    return padTop + chartH - (clamped / maxY) * chartH;
+  const getY = (val: number, min: number, max: number) => {
+    const clamped = Math.max(min, Math.min(max, val));
+    const range = max - min || 1;
+    return padTop + chartH - ((clamped - min) / range) * chartH;
   };
 
-  const points = reps.map((r, i) => ({
-    x: getX(i),
-    y: getY(isRom ? r.peakAngle : r.severity),
-    val: isRom ? r.peakAngle : r.severity,
-    repNum: r.repNumber,
-    isLimited: r.limitationDetected,
-  }));
+  const points = reps.map((r, i) => {
+    const rawVal = isRom ? r.peakAngle : r.improvementFromPrevious ?? 0;
+    const y = isRom ? getY(r.peakAngle, 0, 180) : getY(rawVal, minImprovement, maxImprovement);
+    return {
+      x: getX(i),
+      y,
+      val: rawVal,
+      repNum: r.repNumber,
+      isLimited: r.limitationDetected,
+      improvement: r.improvementFromPrevious,
+      isFirst: i === 0,
+    };
+  });
 
   const pathD = points.reduce((acc, pt, i) => {
     return i === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
   }, '');
 
-  const targetY = getY(targetAngle);
+  const targetY = getY(targetAngle, 0, 180);
+  const zeroY = getY(0, minImprovement, maxImprovement);
 
   return (
     <div className="rep-trend-chart">
       {/* Metric Toggle Header */}
       <div className="rep-trend-chart__header">
         <span className="rep-trend-chart__title">
-          {isRom ? 'Repetition ROM Trend' : 'Movement Severity Trend'}
+          {isRom ? 'Repetition ROM Trend' : 'Rep-to-Rep Improvement'}
         </span>
         <div className="rep-trend-chart__toggle">
           <button
@@ -83,9 +93,9 @@ export const RepTrendChart: React.FC<RepTrendChartProps> = ({
           <button
             type="button"
             className={`chart-tab ${!isRom ? 'chart-tab--active' : ''}`}
-            onClick={() => setMetric('SEVERITY')}
+            onClick={() => setMetric('IMPROVEMENT')}
           >
-            Severity
+            Improvement
           </button>
         </div>
       </div>
@@ -126,60 +136,103 @@ export const RepTrendChart: React.FC<RepTrendChartProps> = ({
           </g>
         )}
 
+        {/* Zero baseline (in Improvement mode) */}
+        {!isRom && (
+          <g>
+            <line
+              x1={padLeft}
+              y1={zeroY}
+              x2={width - padRight}
+              y2={zeroY}
+              stroke="var(--border-default)"
+              strokeWidth="1.2"
+              strokeDasharray="2 2"
+            />
+            <text
+              x={padLeft - 4}
+              y={zeroY + 3}
+              textAnchor="end"
+              fill="var(--text-muted)"
+              fontSize="7.5"
+              fontFamily="var(--font-mono)"
+            >
+              0°
+            </text>
+          </g>
+        )}
+
         {/* Y Axis Labels */}
         <text x={padLeft - 4} y={padTop + 3} textAnchor="end" fill="var(--text-disabled)" fontSize="7" fontFamily="var(--font-mono)">
-          {isRom ? '180°' : '100'}
+          {isRom ? '180°' : `+${maxImprovement}°`}
         </text>
         <text x={padLeft - 4} y={padTop + chartH + 3} textAnchor="end" fill="var(--text-disabled)" fontSize="7" fontFamily="var(--font-mono)">
-          0
+          {isRom ? '0°' : `${minImprovement}°`}
         </text>
 
         {/* Trend line */}
         <path
           d={pathD}
           fill="none"
-          stroke={isRom ? 'var(--accent-cyan)' : 'var(--color-warn)'}
+          stroke={isRom ? 'var(--accent-cyan)' : 'var(--color-good)'}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
 
         {/* Data points */}
-        {points.map((pt) => (
-          <g key={pt.repNum}>
-            <circle
-              cx={pt.x}
-              cy={pt.y}
-              r={3.5}
-              fill={isRom ? (pt.isLimited ? '#FFA726' : '#00E676') : 'var(--color-warn)'}
-              stroke="#0D1117"
-              strokeWidth="1.5"
-            />
-            {/* Value label */}
-            <text
-              x={pt.x}
-              y={pt.y - 5}
-              textAnchor="middle"
-              fill="var(--text-primary)"
-              fontSize="8"
-              fontFamily="var(--font-mono)"
-              fontWeight="600"
-            >
-              {isRom ? `${pt.val}°` : `${pt.val}`}
-            </text>
-            {/* X-axis Rep label */}
-            <text
-              x={pt.x}
-              y={height - 5}
-              textAnchor="middle"
-              fill="var(--text-muted)"
-              fontSize="7.5"
-              fontFamily="var(--font-mono)"
-            >
-              R{pt.repNum}
-            </text>
-          </g>
-        ))}
+        {points.map((pt) => {
+          let pointColor = '#00E676';
+          if (isRom) {
+            pointColor = pt.isLimited ? '#FFA726' : '#00E676';
+          } else {
+            if (pt.isFirst) pointColor = 'var(--accent-cyan)';
+            else if (pt.val > 0) pointColor = '#00E676';
+            else if (pt.val < 0) pointColor = '#FF5252';
+            else pointColor = '#FFA726';
+          }
+
+          const labelText = isRom
+            ? `${pt.val}°`
+            : pt.isFirst
+            ? '—'
+            : `${pt.val >= 0 ? '+' : ''}${pt.val}°`;
+
+          return (
+            <g key={pt.repNum}>
+              <circle
+                cx={pt.x}
+                cy={pt.y}
+                r={3.5}
+                fill={pointColor}
+                stroke="#0D1117"
+                strokeWidth="1.5"
+              />
+              {/* Value label */}
+              <text
+                x={pt.x}
+                y={pt.y - 5}
+                textAnchor="middle"
+                fill="var(--text-primary)"
+                fontSize="8"
+                fontFamily="var(--font-mono)"
+                fontWeight="600"
+              >
+                {labelText}
+              </text>
+              {/* X-axis Rep label */}
+              <text
+                x={pt.x}
+                y={height - 5}
+                textAnchor="middle"
+                fill="var(--text-muted)"
+                fontSize="7.5"
+                fontFamily="var(--font-mono)"
+              >
+                R{pt.repNum}
+              </text>
+            </g>
+          );
+        })}
       </svg>
     </div>
   );

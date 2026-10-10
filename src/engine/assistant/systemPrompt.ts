@@ -135,6 +135,19 @@ export function buildPhysioSystemPrompt(
     if (sessionContext.notes) {
       contextItems.push(`Context Notes: ${sessionContext.notes}`);
     }
+    if (sessionContext.patientState) {
+      const ps = sessionContext.patientState;
+      contextItems.push(`Structured State: Current ROM ${ps.currentROM.value ?? '—'}° (Source: ${ps.currentROM.source}, Confidence: ${(ps.currentROM.confidence * 100).toFixed(0)}%)`);
+      contextItems.push(`Target ROM: ${ps.targetROM.value}° (Source: ${ps.targetROM.source})`);
+      contextItems.push(`Movement Quality Score: ${ps.quality.value.score}/100 (Stability: ${ps.quality.value.stability}/100, Source: ${ps.quality.source})`);
+      if (ps.compensation.value.detected) {
+        contextItems.push(`Active Compensation: ${ps.compensation.value.primaryFault || 'Detected'} (Severity: ${ps.compensation.value.severity}, Source: ${ps.compensation.source})`);
+      }
+      contextItems.push(`Clinical Safety State: ${ps.safety.value.rehabilitationSafetyState} (Level: ${ps.safety.value.level})`);
+      contextItems.push(`Safety Advice: ${ps.safety.value.statusMessage}`);
+      contextItems.push(`Clinical Recommendation: ${ps.recommendation.value.reason} (Sets: ${ps.recommendation.value.sets}, Reps: ${ps.recommendation.value.repetitions})`);
+      contextItems.push(`Next Actionable Cue: ${ps.nextAction.value.actionInstruction}`);
+    }
 
     if (contextItems.length > 0) {
       sections.push(

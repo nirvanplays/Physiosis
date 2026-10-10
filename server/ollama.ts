@@ -18,15 +18,34 @@ interface OllamaVersionResponse {
 
 import type { AssistantLanguage, PhysioAssistantContext } from '../src/types/assistant';
 
+import type { PatientRehabilitationState } from '../src/engine/state/PatientRehabilitationState';
+import { extractAssistantContext } from '../src/engine/state/PatientRehabilitationState';
+
 interface ChatRequestBody {
   message?: string;
   language?: AssistantLanguage | string;
   sessionContext?: PhysioAssistantContext;
+  patientState?: PatientRehabilitationState;
 }
 
 import { checkSafetyGuard, RED_FLAG_SAFETY_RESPONSE } from '../src/engine/assistant/safetyGuard';
 import { checkDomainGate, OUT_OF_DOMAIN_REFUSALS } from '../src/engine/assistant/domainGuard';
 import { buildPhysioSystemPrompt, resolveLanguageObject } from '../src/engine/assistant/systemPrompt';
+import { PhysioKnowledgeEngine } from '../src/engine/knowledge/PhysioKnowledgeEngine';
+import type { StructuredSessionReportData } from '../src/engine/report/ReportTypes';
+import { IntelligentReportEngine } from '../src/engine/report/IntelligentReportEngine';
+
+function isConversationalGreeting(msg: string): boolean {
+  const clean = msg.toLowerCase().trim();
+  const greetings = ['hi', 'hello', 'hey', 'namaste', 'good morning', 'good afternoon', 'good evening', 'who are you', 'what can you do', 'help me'];
+  return greetings.includes(clean) || greetings.some((g) => clean.startsWith(`${g} `) && clean.length < 25);
+}
+
+function isSessionTelemetryQuery(msg: string): boolean {
+  const lower = msg.toLowerCase();
+  const sessionKeywords = ['my rep', 'my rom', 'my angle', 'my score', 'my last session', 'my progress', 'how many rep', 'my telemetry', 'my performance', 'did i reach target', 'how was my form'];
+  return sessionKeywords.some((k) => lower.includes(k));
+}
 
 /**
  * Validate that response contains expected script for regional languages.
@@ -166,8 +185,18 @@ export async function handlePhysioChatRequest(
     };
   }
 
-  // ── 0. Authoritative Language Resolution ─────────────────────────────────
+  // ── 0. Authoritative Language Resolution & Multimodal State Extraction ───
   const assistantLang = resolveLanguageObject(reqBody.language);
+
+  // If structured multimodal PatientRehabilitationState is provided, merge it into sessionContext
+  if (reqBody.patientState) {
+    const derivedContext = extractAssistantContext(reqBody.patientState);
+    reqBody.sessionContext = {
+      ...derivedContext,
+      ...(reqBody.sessionContext || {}),
+      patientState: reqBody.patientState,
+    };
+  }
 
   // ── 1. Deterministic Clinical Red-Flag Safety Classifier ─────────────────
   // Intercept acute emergencies and high-risk symptoms immediately
@@ -199,6 +228,30 @@ export async function handlePhysioChatRequest(
         model: 'domain-guard',
         isOutOfDomain: true,
         reason: domainCheck.reason,
+        timestamp: new Date().toISOString(),
+      },
+    };
+  }
+
+  // ── 2.5. Local Physiotherapy RAG Knowledge Retrieval (Patch 7) ───────────
+  const retrieval = PhysioKnowledgeEngine.retrieve(userMessage, {
+    exerciseId: reqBody.sessionContext?.exercise,
+  });
+
+  const isGreeting = isConversationalGreeting(userMessage);
+  const isSessionQuery = isSessionTelemetryQuery(userMessage);
+
+  // Strict Failure Invariant: If query cannot be answered from verified clinical
+  // knowledge and is not an active session query or conversational greeting, fail safely.
+  if (!retrieval.hasReliableKnowledge && !isGreeting && !isSessionQuery) {
+    return {
+      statusCode: 200,
+      payload: {
+        success: true,
+        reply: PhysioKnowledgeEngine.UNVERIFIED_FALLBACK_MESSAGE,
+        model: 'knowledge-guard',
+        grounded: false,
+        sources: [],
         timestamp: new Date().toISOString(),
       },
     };
@@ -240,7 +293,10 @@ export async function handlePhysioChatRequest(
   }
 
   // ── 4. Compose Authoritative Non-Diagnostic System Prompt ───────────────
-  const systemPrompt = buildPhysioSystemPrompt(reqBody.sessionContext, assistantLang);
+  let systemPrompt = buildPhysioSystemPrompt(reqBody.sessionContext, assistantLang);
+  if (retrieval.hasReliableKnowledge) {
+    systemPrompt += `\n\n${retrieval.groundedContextText}`;
+  }
 
   try {
     const controller = new AbortController();
@@ -313,12 +369,21 @@ export async function handlePhysioChatRequest(
       }
     }
 
+    if (retrieval.hasReliableKnowledge && retrieval.citations.length > 0) {
+      if (!finalReply.toLowerCase().includes('source:')) {
+        const topCitation = retrieval.citations[0];
+        finalReply += `\n\nSource: ${topCitation.source} — "${topCitation.title}" (${topCitation.date || 'Clinical Guideline'})`;
+      }
+    }
+
     return {
       statusCode: 200,
       payload: {
         success: true,
         reply: finalReply,
         model: modelToUse,
+        grounded: retrieval.hasReliableKnowledge,
+        sources: retrieval.citations,
         timestamp: new Date().toISOString(),
       },
     };
@@ -532,6 +597,136 @@ export async function handleLocalTTSRequest(
 }
 
 /**
+ * Intelligent Session Report Generator Handler (Patch 12).
+ * Formats a strictly grounded prompt for Ollama and verifies output against telemetry numbers.
+ */
+export async function handlePhysioReportRequest(structuredData: StructuredSessionReportData) {
+  const deterministicNarrative = IntelligentReportEngine.generateGroundedNarrative(structuredData);
+  const deterministicVerification = IntelligentReportEngine.verifyReportNumbers(deterministicNarrative, structuredData);
+
+  const { baseUrl, configuredModel } = getOllamaConfig();
+  const health = await queryOllamaHealth();
+
+  if (health.status !== 'CONNECTED') {
+    return {
+      success: true,
+      narrative: deterministicNarrative,
+      verification: deterministicVerification,
+      source: 'DETERMINISTIC_GROUNDED',
+      model: 'deterministic-fallback',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  const modelToUse =
+    configuredModel || (health.availableModels && health.availableModels.length > 0 ? health.availableModels[0] : 'llama3');
+
+  const systemInstruction = `You are a clinical physiotherapy session report summarizer.
+You will receive structured JSON data representing a completed rehabilitation session.
+TASK: Write a concise, 3-4 sentence clinical narrative summary of the session for the patient.
+STRICT MANDATORY RULES:
+1. YOU MUST NOT INVENT, ESTIMATE, OR ALTER ANY NUMBERS.
+2. Every number you write MUST match the numbers in the JSON data exactly (repetitions, degrees, percentages, seconds).
+3. Do NOT diagnose medical conditions (no "cured", "tear", "syndrome").
+4. Use objective movement terminology ("observed progress", "reference target", "movement profile").`;
+
+  const s = structuredData.sessionSummary;
+  const q = structuredData.movementQuality;
+  const c = structuredData.compensationAnalysis;
+
+  const prompt = `Session Data:
+Exercise: ${s.exercise}
+Duration: ${s.durationFormatted} (${s.durationSeconds}s)
+Repetitions: ${s.repetitions}
+Best ROM: ${s.bestROM}°
+Average ROM: ${s.averageROM}°
+Reference Target: ${s.targetAngle}°
+Quality Score: ${q.qualityScore}%
+Consistency: ${q.consistency}%
+Symmetry: ${q.symmetry}%
+Compensations Count: ${c.totalCompensationsCount}
+Postural Score: ${c.integrityScore}%
+Focus Next: ${structuredData.guidance.focusNext}
+Safety: ${structuredData.safety.safetyLevel} (${structuredData.safety.statusMessage})
+Escalation: ${structuredData.escalation.recommended ? structuredData.escalation.reason : 'None'}
+
+Write the grounded clinical narrative summary now:`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const ollamaRes = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: modelToUse,
+        stream: false,
+        messages: [
+          { role: 'system', content: systemInstruction },
+          { role: 'user', content: prompt },
+        ],
+        options: {
+          temperature: 0.1,
+          num_predict: 200,
+        },
+      }),
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!ollamaRes.ok) {
+      return {
+        success: true,
+        narrative: deterministicNarrative,
+        verification: deterministicVerification,
+        source: 'DETERMINISTIC_GROUNDED',
+        model: 'deterministic-fallback',
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    const json: any = await ollamaRes.json();
+    const replyText = json?.message?.content?.trim() || '';
+
+    // Verify all numbers in Ollama reply against structured telemetry
+    const ollamaVerification = IntelligentReportEngine.verifyReportNumbers(replyText, structuredData);
+
+    if (!ollamaVerification.isValid) {
+      console.warn('[OllamaReport] Telemetry mismatch detected in Ollama response, reverting to deterministic narrative:', ollamaVerification.discrepancies);
+      return {
+        success: true,
+        narrative: deterministicNarrative,
+        verification: deterministicVerification,
+        source: 'DETERMINISTIC_GROUNDED',
+        model: 'deterministic-fallback',
+        timestamp: new Date().toISOString(),
+        rejectedOllamaReply: replyText,
+      };
+    }
+
+    return {
+      success: true,
+      narrative: replyText,
+      verification: ollamaVerification,
+      source: 'OLLAMA_GROUNDED',
+      model: modelToUse,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (err: any) {
+    return {
+      success: true,
+      narrative: deterministicNarrative,
+      verification: deterministicVerification,
+      source: 'DETERMINISTIC_GROUNDED',
+      model: 'deterministic-fallback',
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+/**
  * Vite Dev Server Plugin to mount /api/physio-chat, /api/physio-health, /api/physio-stt, and /api/physio-tts
  */
 export function ollamaDevServerPlugin(): Plugin {
@@ -646,6 +841,28 @@ export function ollamaDevServerPlugin(): Plugin {
                   error: err?.message,
                 })
               );
+            }
+            return;
+          } else {
+            res.statusCode = 405;
+            res.end('Method Not Allowed');
+            return;
+          }
+        }
+
+        // 5. Intelligent Session Report endpoint (Patch 12)
+        if (url === '/api/physio-report') {
+          if (req.method === 'POST') {
+            try {
+              const body = await parseJsonBody<{ structuredData: StructuredSessionReportData }>(req);
+              const result = await handlePhysioReportRequest(body.structuredData);
+              res.setHeader('Content-Type', 'application/json');
+              res.statusCode = 200;
+              res.end(JSON.stringify(result));
+            } catch (err: any) {
+              res.setHeader('Content-Type', 'application/json');
+              res.statusCode = 500;
+              res.end(JSON.stringify({ success: false, error: err?.message }));
             }
             return;
           } else {

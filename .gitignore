@@ -7,6 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies and build outputs
 node_modules
 dist
 dist-ssr
@@ -29,6 +30,26 @@ dist-ssr
 .env.*
 !.env.example
 
-# Temporary / artifact zip files
+# Temporary / artifact files
 files.zip
 files/
+
+# Python caches and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Large datasets
+data/
+*.npz
+
+# Developer scratch, AI logs, and local knowledge graphs
+scratch/
+graphify-out/
+.agents/
+.vercel

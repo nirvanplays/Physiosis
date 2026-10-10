@@ -177,19 +177,23 @@ export function createPersonalizedLegRaiseTimeline(patientPeakAngle: number): An
   };
 }
 
+import { getLandmarksForSide } from '../../biomechanics/sideLandmarks';
+
 // ─── Biomechanical Metric Calculation ─────────────────────────────────────────
 
 /**
- * Calculate right straight-leg raise elevation angle (degrees) relative to torso axis.
- * Uses Shoulder (12), Hip (24), Knee (26), Ankle (28).
+ * Calculate straight-leg raise elevation angle (degrees) relative to torso axis for selected side.
+ * Uses Shoulder, Hip, Knee, and Ankle landmarks.
  */
-export function calculateStraightLegRaise(landmarks: Landmark3D[]): number | null {
-  const shoulder = landmarks[12];
-  const hip = landmarks[24];
-  const ankle = landmarks[28] ?? landmarks[26];
+export function calculateStraightLegRaise(
+  landmarks: Landmark3D[],
+  side: 'left' | 'right' | 'bilateral' = 'right'
+): number | null {
+  const { shoulder, hip, ankle, knee } = getLandmarksForSide(landmarks, side);
+  const distalAnkle = ankle ?? knee;
 
-  if (!hip || !ankle) return null;
-  if ((hip.visibility ?? 1) < 0.35 || (ankle.visibility ?? 1) < 0.35) {
+  if (!hip || !distalAnkle) return null;
+  if ((hip.visibility ?? 1) < 0.35 || (distalAnkle.visibility ?? 1) < 0.35) {
     return null;
   }
 
@@ -202,8 +206,8 @@ export function calculateStraightLegRaise(landmarks: Landmark3D[]): number | nul
   }
 
   // Leg vector (Hip to Ankle)
-  const legDx = ankle.x - hip.x;
-  const legDy = ankle.y - hip.y;
+  const legDx = distalAnkle.x - hip.x;
+  const legDy = distalAnkle.y - hip.y;
 
   const torsoMag = Math.sqrt(torsoDx * torsoDx + torsoDy * torsoDy) || 1;
   const legMag = Math.sqrt(legDx * legDx + legDy * legDy) || 1;
@@ -293,10 +297,10 @@ export function getStraightLegRaiseFeedback(
 export function getStraightLegRaiseLiveGuide(
   landmarks: Landmark3D[],
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  side: 'left' | 'right' | 'bilateral' = 'right'
 ): LiveGuideOverlay | null {
-  const hip = landmarks[24];
-  const shoulder = landmarks[12];
+  const { hip, shoulder } = getLandmarksForSide(landmarks, side);
   if (!hip) return null;
 
   const hipX = hip.x * canvasWidth;
@@ -327,13 +331,28 @@ export function getStraightLegRaiseLiveGuide(
 // ─── Exported Exercise Definition ─────────────────────────────────────────────
 
 export const straightLegRaiseExercise: ExerciseDefinition = {
-  id: 'straight-leg-raise',
+  id: 'straight_leg_raise',
   name: 'Straight-Leg Raise',
   category: 'Lower Body',
+  bodyRegion: 'Knee / Lower Limb',
   description:
     'Supine elevation of the extended leg to assess hip flexor control and active hamstring range of motion.',
   difficulty: 'intermediate',
   side: 'right',
+
+  // Exercise Classification Metadata
+  laterality: 'left/right',
+  supportedLateralities: ['left', 'right'],
+  targetMetric: 'Acetabulofemoral Flexion Angle',
+  unit: 'degrees',
+  poseLandmarks: ['shoulder', 'hip', 'knee', 'ankle'],
+  analysisMode: 'kinematic_rom',
+  referenceDataAvailable: false,
+  sourceType: 'PHYSIOSIS PROTOTYPE EXERCISE',
+  isDatasetBacked: false,
+  liveAnalysisAvailable: true,
+  analysisConfidence: 'HIGH',
+
   metricName: 'Leg Elevation',
   plane: 'Sagittal Plane',
 

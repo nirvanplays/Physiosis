@@ -150,26 +150,39 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
                     <th>Rep</th>
                     <th>Peak ROM</th>
                     <th>Target</th>
-                    <th>Deviation</th>
+                    <th>Change vs Previous</th>
                     <th>Quality</th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {session.reps.map((r) => (
-                    <tr key={r.repNumber}>
-                      <td className="mono">Rep {r.repNumber}</td>
-                      <td className="mono font-bold">{r.peakAngle}°</td>
-                      <td className="mono text-muted">{r.targetAngle}°</td>
-                      <td className="mono">{r.deviation}°</td>
-                      <td className="mono">{r.qualityScore}/100</td>
-                      <td>
-                        <span className={`session-rep-tag session-rep-tag--${r.statusLabel.toLowerCase().replace(' ', '-')}`}>
-                          {r.statusLabel}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {session.reps.map((r, idx) => {
+                    const prevRep = idx > 0 ? session.reps[idx - 1] : null;
+                    const delta = r.improvementFromPrevious ?? (prevRep ? r.peakAngle - prevRep.peakAngle : null);
+
+                    return (
+                      <tr key={r.repNumber}>
+                        <td className="mono">Rep {r.repNumber}</td>
+                        <td className="mono font-bold">{r.peakAngle}°</td>
+                        <td className="mono text-muted">{r.targetAngle}°</td>
+                        <td className="mono">
+                          {delta !== null ? (
+                            <span style={{ color: delta > 0 ? '#00E676' : delta < 0 ? '#FF5252' : 'var(--text-muted)' }}>
+                              {delta >= 0 ? `+${delta}°` : `${delta}°`}
+                            </span>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </td>
+                        <td className="mono">{r.qualityScore}/100</td>
+                        <td>
+                          <span className={`session-rep-tag session-rep-tag--${r.statusLabel.toLowerCase().replace(' ', '-')}`}>
+                            {r.statusLabel}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

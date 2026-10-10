@@ -15,13 +15,15 @@ import { LiveFeedCard } from './LiveFeedCard';
 import { AnalysisCard } from './AnalysisCard';
 import { ReferenceExerciseCard } from './ReferenceExerciseCard';
 import { SessionHealthCard } from './SessionHealthCard';
-import { RecoveryTrendCard } from '../session/RecoveryTrendCard';
 import { MovementProgressCard } from '../session/MovementProgressCard';
+import { MovementProfileCard } from '../session/MovementProfileCard';
 import { SessionHistory } from '../session/SessionHistory';
 import { FinalSessionReport } from '../session/FinalSessionReport';
 import { PatientProfileModal } from '../profile/PatientProfileModal';
 import { PresentationQAPanel } from '../dev/PresentationQAPanel';
 import { PhysioAssistant } from '../assistant/PhysioAssistant';
+import { ExerciseLibraryModal } from '../exercise/ExerciseLibraryModal';
+import { Physiosis3DViewer } from '../three/Physiosis3DViewer';
 import { usePoseTracking } from '../../hooks/usePoseTracking';
 import { useAuth } from '../../context/AuthContext';
 import { sessionService } from '../../services/sessionService';
@@ -38,9 +40,17 @@ export const Dashboard: React.FC = () => {
   // ── Authoritative Mode State (Single Source of Truth) ─────────────────────
   const [mode, setMode] = useState<'TUTORIAL' | 'PRACTICE' | 'LIVE' | 'DEMO'>('TUTORIAL');
 
-  // Active exercise selection
+  // Active exercise selection & Laterality state
   const [selectedExerciseId, setSelectedExerciseId] = useState<string>('shoulder-flexion');
-  const activeExercise = getExercise(selectedExerciseId) ?? getDefaultExercise();
+  const [selectedSide, setSelectedSide] = useState<'left' | 'right' | 'bilateral'>('right');
+  const [isLibraryModalOpen, setIsLibraryModalOpen] = useState<boolean>(false);
+  const [dimensionMode, setDimensionMode] = useState<'3D' | '2D'>('3D');
+
+  const baseExercise = getExercise(selectedExerciseId) ?? getDefaultExercise();
+  const activeExercise = React.useMemo(() => {
+    const effectiveSide = baseExercise.laterality === 'bilateral' ? 'bilateral' : selectedSide;
+    return { ...baseExercise, side: effectiveSide };
+  }, [baseExercise, selectedSide]);
 
   // Demo mode telemetry state
   const [demoAngle, setDemoAngle] = useState<number>(activeExercise.startAngle);
@@ -57,10 +67,15 @@ export const Dashboard: React.FC = () => {
     stats,
     shoulderFlexion,
     sessionState,
+    latestLandmarks,
+    temporalPrediction,
     startCamera,
     stopCamera,
     toggleCamera,
+    startExerciseSession,
+    stopExerciseSession,
     resetExerciseSession,
+    setOnAutoEnd,
   } = usePoseTracking(activeExercise);
 
   // Persistent session history state & modals
@@ -71,15 +86,15 @@ export const Dashboard: React.FC = () => {
 
   // ── End-Session Lifecycle & Diagnostic States (Patch 3) ───────────────────
   const isEndingRef = useRef(false);
-  const [sessionStatus, setSessionStatus] = useState<'ACTIVE' | 'ENDING' | 'ENDED'>('ENDED');
+  const [sessionStatus, setSessionStatus] = useState<'IDLE' | 'READY' | 'ACTIVE' | 'ENDING' | 'ENDED'>('IDLE');
   const [endReason, setEndReason] = useState<SessionEndReason | null>(null);
   const [persistenceStatus, setPersistenceStatus] = useState<'SAVED' | 'FAILED' | 'PENDING' | 'IDLE'>('IDLE');
   const [endSessionNotice, setEndSessionNotice] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingSessionForRetry, setPendingSessionForRetry] = useState<PhysiosisSession | null>(null);
 
-  // ── Session Countdown Timer (Patch 4: 120-Second Auto-End) ────────────────
-  const SESSION_DURATION_SECONDS = 120;
+  // ── Session Countdown Timer (3-Minute Rehabilitation Session) ─────────────
+  const SESSION_DURATION_SECONDS = 180;
   const TEST_SESSION_DURATION_SECONDS = 10;
 
   const [isTestTimer, setIsTestTimer] = useState<boolean>(() => {
@@ -96,26 +111,21 @@ export const Dashboard: React.FC = () => {
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Sync sessionStatus with camera streaming state & start timer when camera streams
+  // Sync camera preview and session lifecycle
   useEffect(() => {
-    if (isStreaming && activeSummarySession === null && sessionStatus !== 'ENDING') {
-      setMode('LIVE');
-      setSessionStatus('ACTIVE');
-      if (!isTimerRunning && sessionStartTime === null) {
-        const now = Date.now();
-        setSessionStartTime(now);
-        setRemainingSeconds(activeDuration);
-        setIsTimerRunning(true);
-      }
-    } else if (!isStreaming) {
+    if (!isStreaming) {
       if (isTimerRunning) {
         setIsTimerRunning(false);
       }
-      if (mode === 'LIVE') {
+      if (mode === 'LIVE' || mode === 'PRACTICE') {
         setMode('TUTORIAL');
+        setSessionStatus('IDLE');
       }
+    } else if (isStreaming && !sessionState.isActive && mode === 'TUTORIAL') {
+      setMode('PRACTICE');
+      setSessionStatus('READY');
     }
-  }, [isStreaming, activeSummarySession, sessionStatus, isTimerRunning, sessionStartTime, activeDuration, mode]);
+  }, [isStreaming, sessionState.isActive, isTimerRunning, mode]);
 
   // Load saved sessions from Supabase for the authenticated patient
   const refreshSessions = useCallback(async () => {
@@ -167,9 +177,14 @@ export const Dashboard: React.FC = () => {
 
   // Handle exercise selection change
   const handleSelectExercise = useCallback(
-    (exerciseId: string) => {
+    (exerciseId: string, side?: 'left' | 'right' | 'bilateral') => {
       const newEx = getExercise(exerciseId) ?? getDefaultExercise();
       setSelectedExerciseId(exerciseId);
+      if (side) {
+        setSelectedSide(side);
+      } else if (newEx.laterality === 'bilateral') {
+        setSelectedSide('bilateral');
+      }
       setEndSessionNotice(null);
       setSaveError(null);
       setPendingSessionForRetry(null);
@@ -185,10 +200,38 @@ export const Dashboard: React.FC = () => {
     [resetExerciseSession, activeDuration]
   );
 
+  // Handle laterality (side) change with clean state reset
+  const handleSelectSide = useCallback(
+    (side: 'left' | 'right' | 'bilateral') => {
+      setSelectedSide(side);
+      resetExerciseSession();
+    },
+    [resetExerciseSession]
+  );
+
   // Practice mode transition triggers
-  const handleStartPractice = useCallback(() => {
+  const handleStartPractice = useCallback(async () => {
     setMode('PRACTICE');
-  }, []);
+    if (!isStreaming) {
+      await startCamera();
+    }
+  }, [isStreaming, startCamera]);
+
+  const handleStartLiveSession = useCallback(async () => {
+    if (!isStreaming) {
+      await startCamera();
+    }
+    setMode('LIVE');
+    setSessionStatus('ACTIVE');
+    setEndSessionNotice(null);
+    setSaveError(null);
+    setPendingSessionForRetry(null);
+    const now = Date.now();
+    setSessionStartTime(now);
+    setRemainingSeconds(activeDuration);
+    setIsTimerRunning(true);
+    startExerciseSession(activeDuration);
+  }, [isStreaming, startCamera, activeDuration, startExerciseSession]);
 
   const handleBackToTutorial = useCallback(() => {
     setMode('TUTORIAL');
@@ -220,6 +263,7 @@ export const Dashboard: React.FC = () => {
         timerIntervalRef.current = null;
       }
       setIsTimerRunning(false);
+      stopExerciseSession('COMPLETED');
 
       try {
         // 2. Stop active camera recording and tracking loop immediately
@@ -241,13 +285,15 @@ export const Dashboard: React.FC = () => {
 
         // 4. Aggregate whole-session metrics into authoritative PhysiosisSession
         const patientId = profile?.patient_login_id || (isAuthenticated ? profile?.id : undefined);
+        const effectiveSide = activeExercise.laterality === 'bilateral' ? 'bilateral' : (activeExercise.side || selectedSide);
         const finalSession = buildPhysiosisSession(
           sessionState,
           activeExercise.name,
           activeExercise.id,
           reason,
           activeExercise.targetAngle,
-          patientId
+          patientId,
+          effectiveSide
         );
 
         if (!finalSession) {
@@ -310,8 +356,16 @@ export const Dashboard: React.FC = () => {
       profile?.patient_login_id,
       refreshSessions,
       stopCamera,
+      stopExerciseSession,
     ]
   );
+
+  // Hook up automatic end session notification from ExerciseSessionEngine
+  useEffect(() => {
+    setOnAutoEnd(() => {
+      endSession('automatic');
+    });
+  }, [setOnAutoEnd, endSession]);
 
   // ── Countdown Timer Tick & Tab Visibility Sync (Drift-Free) ───────────────
   useEffect(() => {
@@ -437,12 +491,17 @@ export const Dashboard: React.FC = () => {
         isInitializing={isInitializing}
         onToggleCamera={toggleCamera}
         selectedExerciseId={selectedExerciseId}
+        selectedSide={selectedSide}
         onSelectExercise={handleSelectExercise}
+        onSelectSide={handleSelectSide}
+        onOpenLibrary={() => setIsLibraryModalOpen(true)}
         onEndSession={() => endSession('manual')}
         hasActiveSession={hasActiveSession}
         savedSessionsCount={savedSessions.length}
         onOpenHistory={() => setIsHistoryModalOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
+        dimensionMode={dimensionMode}
+        onToggleDimension={setDimensionMode}
       />
 
       {/* ── Optional Notification / Save Error Banners ──────────────────── */}
@@ -505,59 +564,115 @@ export const Dashboard: React.FC = () => {
       )}
 
       <main className="dashboard-container" id="main-content" role="main">
-        {/* ── 1. Main Workspace: Live Feed + Analysis + Reference Avatar ── */}
-        <section className="workspace-main" aria-label="Main rehabilitation workspace">
-          {/* Column A: Live Camera Engine Feed */}
-          <div className="workspace-main__feed">
-            <LiveFeedCard
-              mode={mode}
-              engineStatus={engineStatus}
-              isStreaming={isStreaming}
-              isInitializing={isInitializing}
-              errorMessage={errorMessage}
-              stats={stats}
-              videoRef={videoRef}
-              canvasRef={canvasRef}
-              onToggleCamera={toggleCamera}
-              onEnterDemoMode={handleEnterDemoMode}
-              onExitDemoMode={handleExitDemoMode}
-              remainingSeconds={remainingSeconds}
-              isTimerRunning={isTimerRunning}
-            />
-          </div>
+        {/* ── 1. Main Workspace: 3D Biomechanics Centerpiece (60%) + Real-Time Analysis (40%) ── */}
+        {dimensionMode === '3D' ? (
+          <section className="workspace-main" aria-label="3D Rehabilitation Biomechanics Workspace">
+            {/* Column A: 3D Skeletal Biomechanics Centerpiece */}
+            <div className="workspace-main__hero">
+              <Physiosis3DViewer
+                exerciseId={activeExercise.id}
+                exerciseName={activeExercise.name}
+                mode={mode}
+                initialSide={selectedSide}
+                targetAngle={activeExercise.targetAngle || 165}
+                liveLandmarks={latestLandmarks}
+                isStreaming={isStreaming}
+                isInitializing={isInitializing}
+                errorMessage={errorMessage}
+                liveAngle={shoulderFlexion.angle}
+                liveAnalysis={shoulderFlexion}
+                stats={stats}
+                isSessionActive={sessionState.isActive}
+                sessionRemainingSeconds={sessionState.isActive ? sessionState.metrics.timeRemainingSeconds : remainingSeconds}
+                completedReps={sessionState.metrics.completedReps}
+                onStartSession={handleStartLiveSession}
+                onEndSession={() => endSession('manual')}
+                videoRef={videoRef}
+                canvasRef={canvasRef}
+                onToggleCamera={toggleCamera}
+                onSwitchTo2D={() => setDimensionMode('2D')}
+                onAngleChange={(ang) => {
+                  if (mode === 'DEMO') {
+                    setDemoAngle(ang);
+                  }
+                }}
+              />
+            </div>
 
-          {/* Column B: Real-Time Movement Analysis */}
-          <div className="workspace-main__analysis">
-            <AnalysisCard
-              exercise={activeExercise}
-              mode={mode}
-              engineStatus={engineStatus}
-              isStreaming={isStreaming}
-              stats={stats}
-              shoulderFlexion={shoulderFlexion}
-              sessionState={sessionState}
-              demoAngle={demoAngle}
-              demoPhase={demoPhase}
-              demoTimelineMs={demoTimelineMs}
-            />
-          </div>
+            {/* Column B: Real-Time Movement Analysis */}
+            <div className="workspace-main__analysis">
+              <AnalysisCard
+                exercise={activeExercise}
+                mode={mode}
+                engineStatus={engineStatus}
+                isStreaming={isStreaming}
+                stats={stats}
+                shoulderFlexion={shoulderFlexion}
+                sessionState={sessionState}
+                demoAngle={demoAngle}
+                demoPhase={demoPhase}
+                demoTimelineMs={demoTimelineMs}
+              />
+            </div>
+          </section>
+        ) : (
+          <section className="workspace-main workspace-main--2d" aria-label="2D Planar Avatar Workspace">
+            {/* Column A: Live Camera Engine Feed */}
+            <div className="workspace-main__feed">
+              <LiveFeedCard
+                mode={mode}
+                engineStatus={engineStatus}
+                isStreaming={isStreaming}
+                isInitializing={isInitializing}
+                errorMessage={errorMessage}
+                stats={stats}
+                videoRef={videoRef}
+                canvasRef={canvasRef}
+                onToggleCamera={toggleCamera}
+                onEnterDemoMode={handleEnterDemoMode}
+                onExitDemoMode={handleExitDemoMode}
+                remainingSeconds={remainingSeconds}
+                isTimerRunning={isTimerRunning}
+              />
+            </div>
 
-          {/* Column C: Reference Exercise Demonstration / Live Practice Panel */}
-          <div className="workspace-main__reference">
-            <ReferenceExerciseCard
-              mode={mode}
-              onStartPractice={handleStartPractice}
-              onBackToTutorial={handleBackToTutorial}
-              onExitDemoMode={handleExitDemoMode}
-              exercise={activeExercise}
-              liveAngle={shoulderFlexion.angle}
-              lastLimitationPeak={sessionState.lastLimitationPeakAngle}
-              latestRep={sessionState.latestRep}
-              liveAnalysis={shoulderFlexion}
-              onDemoFrame={handleDemoFrame}
-            />
-          </div>
-        </section>
+            {/* Column B: Real-Time Movement Analysis */}
+            <div className="workspace-main__analysis">
+              <AnalysisCard
+                exercise={activeExercise}
+                mode={mode}
+                engineStatus={engineStatus}
+                isStreaming={isStreaming}
+                stats={stats}
+                shoulderFlexion={shoulderFlexion}
+                sessionState={sessionState}
+                demoAngle={demoAngle}
+                demoPhase={demoPhase}
+                demoTimelineMs={demoTimelineMs}
+              />
+            </div>
+
+            {/* Column C: Reference Exercise Demonstration / Live Practice Panel */}
+            <div className="workspace-main__reference">
+              <ReferenceExerciseCard
+                mode={mode}
+                onStartPractice={handleStartPractice}
+                onBackToTutorial={handleBackToTutorial}
+                onExitDemoMode={handleExitDemoMode}
+                exercise={activeExercise}
+                selectedSide={selectedSide}
+                onSelectSide={handleSelectSide}
+                liveLandmarks={latestLandmarks}
+                isStreaming={isStreaming}
+                liveAngle={shoulderFlexion.angle}
+                lastLimitationPeak={sessionState.lastLimitationPeakAngle}
+                latestRep={sessionState.latestRep}
+                liveAnalysis={shoulderFlexion}
+                onDemoFrame={handleDemoFrame}
+              />
+            </div>
+          </section>
+        )}
 
         {/* ── 2. Lower Workspace: Session Health + Progress + Recovery Trends ── */}
         <section className="workspace-lower" aria-label="Rehabilitation session and progress analytics">
@@ -578,12 +693,16 @@ export const Dashboard: React.FC = () => {
               sessions={savedSessions}
               activeExercise={activeExercise}
               onOpenLatestReport={handleOpenLatestReport}
+              currentAngle={shoulderFlexion.angle}
             />
-            <RecoveryTrendCard
+            <MovementProfileCard
               sessions={savedSessions}
               activeExerciseId={selectedExerciseId}
+              activeExercise={activeExercise}
+              onSelectExercise={(id) => setSelectedExerciseId(id)}
             />
           </div>
+
         </section>
       </main>
 
@@ -634,7 +753,11 @@ export const Dashboard: React.FC = () => {
         activeExercise={activeExercise}
         sessionState={sessionState}
         analysis={shoulderFlexion}
+        stats={stats}
         savedSessionsCount={savedSessions.length}
+        savedSessions={savedSessions}
+        landmarks={latestLandmarks}
+        temporalPrediction={temporalPrediction}
         sessionStatus={sessionStatus}
         endReason={endReason}
         isReportReady={activeSummarySession !== null}
@@ -661,6 +784,19 @@ export const Dashboard: React.FC = () => {
         lastSavedSession={savedSessions[0] ?? null}
         savedSessions={savedSessions}
         patientId={profile?.patient_login_id}
+      />
+
+      {/* ── Rehabilitation Protocol Exercise Library Modal (Patch 2) ─── */}
+      <ExerciseLibraryModal
+        isOpen={isLibraryModalOpen}
+        onClose={() => setIsLibraryModalOpen(false)}
+        selectedExerciseId={selectedExerciseId}
+        selectedSide={selectedSide}
+        onSelectExercise={handleSelectExercise}
+        onStartPractice={async (exId, side) => {
+          handleSelectExercise(exId, side);
+          await handleStartPractice();
+        }}
       />
     </div>
   );

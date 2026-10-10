@@ -28,6 +28,7 @@ import type { RepResult } from '../../engine/session/SessionTypes';
 import type { ExerciseDefinition } from '../../engine/exercise/ExerciseTypes';
 import type { ShoulderFlexionAnalysis } from '../../engine/biomechanics/biomechanicsTypes';
 import { getDefaultExercise } from '../../engine/exercise/ExerciseRegistry';
+import type { PatientRehabilitationState } from '../../engine/state/PatientRehabilitationState';
 
 // ─── Practice state model ───────────────────────────────────────────────────
 
@@ -80,6 +81,8 @@ interface ReferenceSkeletonCanvasProps {
   latestRep?: RepResult | null;
   /** Full live analysis snapshot from usePoseTracking — used for practice state */
   liveAnalysis?: ShoulderFlexionAnalysis | null;
+  /** Authoritative multimodal patient state (Patch 9) */
+  patientState?: PatientRehabilitationState | null;
 }
 
 function computePracticeFeedback(
@@ -123,6 +126,7 @@ export const ReferenceSkeletonCanvas: React.FC<ReferenceSkeletonCanvasProps> = (
   lastLimitationPeak,
   latestRep,
   liveAnalysis,
+  patientState,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const controllerRef = useRef<AnimationController | null>(null);
@@ -193,6 +197,7 @@ export const ReferenceSkeletonCanvas: React.FC<ReferenceSkeletonCanvasProps> = (
           metricName: exercise.metricName,
           postureMode: exercise.postureMode,
           elapsedMs,
+          side: exercise.side,
         });
 
         const now = performance.now();
@@ -239,6 +244,7 @@ export const ReferenceSkeletonCanvas: React.FC<ReferenceSkeletonCanvasProps> = (
           highlightJoint: exercise.highlightJoint,
           metricName: exercise.metricName,
           postureMode: exercise.postureMode,
+          side: exercise.side,
         });
       }
     });
@@ -280,6 +286,7 @@ export const ReferenceSkeletonCanvas: React.FC<ReferenceSkeletonCanvasProps> = (
           highlightJoint: exercise.highlightJoint,
           metricName: exercise.metricName,
           postureMode: exercise.postureMode,
+          side: exercise.side,
         });
       }
     } else {
@@ -408,8 +415,8 @@ export const ReferenceSkeletonCanvas: React.FC<ReferenceSkeletonCanvasProps> = (
   const progressPercent = (currentMs / totalDuration) * 100;
   const currentSeconds = (currentMs / 1000).toFixed(1);
 
-  // Practice-mode derived values (read from liveAnalysis / liveAngle props)
-  const practiceAngle = liveAngle ?? null;
+  // Practice-mode derived values (read from liveAnalysis / liveAngle props or patientState)
+  const practiceAngle = liveAngle ?? patientState?.currentROM.value ?? null;
   const practiceExerciseState = liveAnalysis?.state ?? 'WAITING';
   const practiceStatus = computePracticeStatus(
     practiceAngle,

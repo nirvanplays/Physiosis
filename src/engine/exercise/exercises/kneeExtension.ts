@@ -179,16 +179,19 @@ export function createPersonalizedKneeTimeline(patientPeakAngle: number): Animat
   };
 }
 
+import { getLandmarksForSide } from '../../biomechanics/sideLandmarks';
+
 // ─── Biomechanical Metric Calculation ─────────────────────────────────────────
 
 /**
- * Calculate right knee extension angle in degrees from Hip, Knee, and Ankle landmarks.
+ * Calculate knee extension angle in degrees from Hip, Knee, and Ankle landmarks for selected side.
  * Returns angle in [0, 180] where 180° is fully straight and 90° is bent sitting.
  */
-export function calculateKneeExtension(landmarks: Landmark3D[]): number | null {
-  const hip = landmarks[24];
-  const knee = landmarks[26];
-  const ankle = landmarks[28];
+export function calculateKneeExtension(
+  landmarks: Landmark3D[],
+  side: 'left' | 'right' | 'bilateral' = 'right'
+): number | null {
+  const { hip, knee, ankle } = getLandmarksForSide(landmarks, side);
 
   if (!hip || !knee || !ankle) return null;
   if ((hip.visibility ?? 1) < 0.35 || (knee.visibility ?? 1) < 0.35 || (ankle.visibility ?? 1) < 0.35) {
@@ -291,10 +294,10 @@ export function getKneeExtensionFeedback(
 export function getKneeExtensionLiveGuide(
   landmarks: Landmark3D[],
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  side: 'left' | 'right' | 'bilateral' = 'right'
 ): LiveGuideOverlay | null {
-  const hip = landmarks[24];
-  const knee = landmarks[26];
+  const { hip, knee } = getLandmarksForSide(landmarks, side);
   if (!hip || !knee) return null;
 
   const kneeX = knee.x * canvasWidth;
@@ -327,13 +330,28 @@ export function getKneeExtensionLiveGuide(
 // ─── Exported Exercise Definition ─────────────────────────────────────────────
 
 export const kneeExtensionExercise: ExerciseDefinition = {
-  id: 'knee-extension',
+  id: 'knee_extension',
   name: 'Seated Knee Extension',
   category: 'Lower Body',
+  bodyRegion: 'Knee / Lower Limb',
   description:
     'Seated extension of the knee joint to assess quadriceps mobility and joint extension range.',
   difficulty: 'beginner',
   side: 'right',
+
+  // Exercise Classification Metadata
+  laterality: 'left/right',
+  supportedLateralities: ['left', 'right'],
+  targetMetric: 'Tibiofemoral Extension Angle',
+  unit: 'degrees',
+  poseLandmarks: ['hip', 'knee', 'ankle'],
+  analysisMode: 'kinematic_rom',
+  referenceDataAvailable: false,
+  sourceType: 'PHYSIOSIS PROTOTYPE EXERCISE',
+  isDatasetBacked: false,
+  liveAnalysisAvailable: true,
+  analysisConfidence: 'HIGH',
+
   metricName: 'Knee Extension',
   plane: 'Sagittal Plane',
 

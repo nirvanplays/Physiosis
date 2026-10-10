@@ -1,0 +1,584 @@
+{
+  "split_info": {
+    "classes": [
+      "ankle",
+      "Arm_Circumduction",
+      "ballpress",
+      "cross-body_shoulder_stretch",
+      "isoetric_rotation",
+      "isoetric_side_bending",
+      "Shoulder_Abduction",
+      "Shoulder_Flexion",
+      "Wrist-extension-stretch"
+    ],
+    "train_subjects": [
+      "001",
+      "002",
+      "003",
+      "004",
+      "005",
+      "006",
+      "007",
+      "008",
+      "009",
+      "010",
+      "011",
+      "018",
+      "019",
+      "020",
+      "021",
+      "022",
+      "023",
+      "024",
+      "025",
+      "026",
+      "027",
+      "028",
+      "029",
+      "030",
+      "031"
+    ],
+    "val_subjects": [
+      "012",
+      "013",
+      "014"
+    ],
+    "test_subjects": [
+      "015",
+      "016",
+      "017"
+    ],
+    "train_samples": 6349,
+    "val_samples": 1026,
+    "test_samples": 1181
+  },
+  "models": {
+    "TCN": {
+      "architecture": "TCN",
+      "checkpoint_path": "c:\\Physiosis\\models\\tcn_best.pt",
+      "accuracy": 0.6502963590177815,
+      "macro_f1": 0.6677915631964128,
+      "weighted_f1": 0.6374421431538051,
+      "macro_precision": 0.6879420374532416,
+      "macro_recall": 0.677151027724697,
+      "latency": {
+        "median_ms": 1.1834999895654619,
+        "mean_ms": 1.23823500063736,
+        "p95_ms": 1.5200649329926819,
+        "min_ms": 1.0956000769510865,
+        "max_ms": 1.7656999407336116
+      },
+      "parameters": 264329,
+      "file_size_mb": 1.036107063293457,
+      "confusion_matrix": [
+        [
+          58,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          105,
+          4,
+          11,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          25,
+          45,
+          2,
+          0,
+          14,
+          0,
+          0,
+          25
+        ],
+        [
+          0,
+          1,
+          0,
+          119,
+          0,
+          0,
+          0,
+          0,
+          38
+        ],
+        [
+          0,
+          2,
+          0,
+          31,
+          101,
+          15,
+          0,
+          1,
+          10
+        ],
+        [
+          0,
+          0,
+          0,
+          12,
+          108,
+          46,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          87,
+          46,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          2,
+          35,
+          89,
+          0
+        ],
+        [
+          0,
+          0,
+          14,
+          15,
+          2,
+          0,
+          0,
+          0,
+          118
+        ]
+      ],
+      "per_class": {
+        "ankle": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1_score": 1.0,
+          "support": 58
+        },
+        "Arm_Circumduction": {
+          "precision": 0.7894736842105263,
+          "recall": 0.875,
+          "f1_score": 0.8300395256916996,
+          "support": 120
+        },
+        "ballpress": {
+          "precision": 0.7142857142857143,
+          "recall": 0.40540540540540543,
+          "f1_score": 0.5172413793103449,
+          "support": 111
+        },
+        "cross-body_shoulder_stretch": {
+          "precision": 0.6263157894736842,
+          "recall": 0.7531645569620253,
+          "f1_score": 0.6839080459770115,
+          "support": 158
+        },
+        "isoetric_rotation": {
+          "precision": 0.4786729857819905,
+          "recall": 0.63125,
+          "f1_score": 0.5444743935309974,
+          "support": 160
+        },
+        "isoetric_side_bending": {
+          "precision": 0.5974025974025974,
+          "recall": 0.27710843373493976,
+          "f1_score": 0.3786008230452675,
+          "support": 166
+        },
+        "Shoulder_Abduction": {
+          "precision": 0.7131147540983607,
+          "recall": 0.6541353383458647,
+          "f1_score": 0.6823529411764706,
+          "support": 133
+        },
+        "Shoulder_Flexion": {
+          "precision": 0.6544117647058824,
+          "recall": 0.7063492063492064,
+          "f1_score": 0.6793893129770993,
+          "support": 126
+        },
+        "Wrist-extension-stretch": {
+          "precision": 0.6178010471204188,
+          "recall": 0.7919463087248322,
+          "f1_score": 0.6941176470588235,
+          "support": 149
+        }
+      }
+    },
+    "LSTM": {
+      "architecture": "LSTM",
+      "checkpoint_path": "c:\\Physiosis\\models\\lstm_best.pt",
+      "accuracy": 0.7027942421676545,
+      "macro_f1": 0.7010818512837858,
+      "weighted_f1": 0.6847337547169952,
+      "macro_precision": 0.7169153437666664,
+      "macro_recall": 0.716508840498202,
+      "latency": {
+        "median_ms": 1.000199990812689,
+        "mean_ms": 0.9608755010413006,
+        "p95_ms": 1.100830000359565,
+        "min_ms": 0.6617000326514244,
+        "max_ms": 1.2676999904215336
+      },
+      "parameters": 639754,
+      "file_size_mb": 2.44571590423584,
+      "confusion_matrix": [
+        [
+          58,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          102,
+          16,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          20,
+          1,
+          16,
+          13,
+          0,
+          0,
+          59
+        ],
+        [
+          0,
+          1,
+          0,
+          141,
+          0,
+          0,
+          0,
+          0,
+          16
+        ],
+        [
+          0,
+          2,
+          0,
+          8,
+          107,
+          19,
+          18,
+          6,
+          0
+        ],
+        [
+          0,
+          0,
+          1,
+          16,
+          77,
+          70,
+          0,
+          2,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          96,
+          37,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          20,
+          106,
+          0
+        ],
+        [
+          0,
+          13,
+          3,
+          0,
+          2,
+          0,
+          1,
+          0,
+          130
+        ]
+      ],
+      "per_class": {
+        "ankle": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1_score": 1.0,
+          "support": 58
+        },
+        "Arm_Circumduction": {
+          "precision": 0.85,
+          "recall": 0.85,
+          "f1_score": 0.85,
+          "support": 120
+        },
+        "ballpress": {
+          "precision": 0.5,
+          "recall": 0.18018018018018017,
+          "f1_score": 0.26490066225165565,
+          "support": 111
+        },
+        "cross-body_shoulder_stretch": {
+          "precision": 0.8493975903614458,
+          "recall": 0.8924050632911392,
+          "f1_score": 0.8703703703703703,
+          "support": 158
+        },
+        "isoetric_rotation": {
+          "precision": 0.5297029702970297,
+          "recall": 0.66875,
+          "f1_score": 0.5911602209944752,
+          "support": 160
+        },
+        "isoetric_side_bending": {
+          "precision": 0.6862745098039216,
+          "recall": 0.42168674698795183,
+          "f1_score": 0.5223880597014925,
+          "support": 166
+        },
+        "Shoulder_Abduction": {
+          "precision": 0.7007299270072993,
+          "recall": 0.7218045112781954,
+          "f1_score": 0.7111111111111111,
+          "support": 133
+        },
+        "Shoulder_Flexion": {
+          "precision": 0.7019867549668874,
+          "recall": 0.8412698412698413,
+          "f1_score": 0.7653429602888087,
+          "support": 126
+        },
+        "Wrist-extension-stretch": {
+          "precision": 0.6341463414634146,
+          "recall": 0.87248322147651,
+          "f1_score": 0.7344632768361582,
+          "support": 149
+        }
+      }
+    },
+    "TRANSFORMER": {
+      "architecture": "TRANSFORMER",
+      "checkpoint_path": "c:\\Physiosis\\models\\transformer_best.pt",
+      "accuracy": 0.6587637595258256,
+      "macro_f1": 0.6509420405504941,
+      "weighted_f1": 0.6264166833074585,
+      "macro_precision": 0.6871257337573,
+      "macro_recall": 0.6770281432860935,
+      "latency": {
+        "median_ms": 0.687899999320507,
+        "mean_ms": 0.7640310004353523,
+        "p95_ms": 0.9831300179939712,
+        "min_ms": 0.6084999768063426,
+        "max_ms": 7.163599948398769
+      },
+      "parameters": 283913,
+      "file_size_mb": 1.1582326889038086,
+      "confusion_matrix": [
+        [
+          58,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          84,
+          11,
+          3,
+          0,
+          0,
+          6,
+          8,
+          8
+        ],
+        [
+          0,
+          29,
+          24,
+          7,
+          0,
+          7,
+          0,
+          0,
+          44
+        ],
+        [
+          0,
+          0,
+          0,
+          141,
+          0,
+          0,
+          0,
+          0,
+          17
+        ],
+        [
+          0,
+          1,
+          0,
+          2,
+          120,
+          15,
+          1,
+          17,
+          4
+        ],
+        [
+          0,
+          0,
+          0,
+          15,
+          124,
+          27,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          105,
+          28,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          34,
+          92,
+          0
+        ],
+        [
+          0,
+          7,
+          0,
+          14,
+          1,
+          0,
+          0,
+          0,
+          127
+        ]
+      ],
+      "per_class": {
+        "ankle": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1_score": 1.0,
+          "support": 58
+        },
+        "Arm_Circumduction": {
+          "precision": 0.6942148760330579,
+          "recall": 0.7,
+          "f1_score": 0.6970954356846473,
+          "support": 120
+        },
+        "ballpress": {
+          "precision": 0.6857142857142857,
+          "recall": 0.21621621621621623,
+          "f1_score": 0.3287671232876712,
+          "support": 111
+        },
+        "cross-body_shoulder_stretch": {
+          "precision": 0.7747252747252747,
+          "recall": 0.8924050632911392,
+          "f1_score": 0.8294117647058824,
+          "support": 158
+        },
+        "isoetric_rotation": {
+          "precision": 0.4897959183673469,
+          "recall": 0.75,
+          "f1_score": 0.5925925925925926,
+          "support": 160
+        },
+        "isoetric_side_bending": {
+          "precision": 0.5510204081632653,
+          "recall": 0.16265060240963855,
+          "f1_score": 0.25116279069767444,
+          "support": 166
+        },
+        "Shoulder_Abduction": {
+          "precision": 0.7191780821917808,
+          "recall": 0.7894736842105263,
+          "f1_score": 0.7526881720430108,
+          "support": 133
+        },
+        "Shoulder_Flexion": {
+          "precision": 0.6344827586206897,
+          "recall": 0.7301587301587301,
+          "f1_score": 0.6789667896678967,
+          "support": 126
+        },
+        "Wrist-extension-stretch": {
+          "precision": 0.635,
+          "recall": 0.8523489932885906,
+          "f1_score": 0.7277936962750716,
+          "support": 149
+        }
+      }
+    }
+  },
+  "best_model": "LSTM",
+  "disclaimer": "Advisory research and engineering benchmark only. Do not claim clinical validity from dataset performance alone."
+}

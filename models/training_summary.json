@@ -1,0 +1,32 @@
+{
+  "TCN": {
+    "architecture": "TCN",
+    "best_epoch": 1,
+    "best_val_acc": 0.5799220272904484,
+    "train_time_sec": 2.5511366000864655,
+    "peak_vram_mb": 47.134765625,
+    "total_params": 264329,
+    "model_size_mb": 1.0083351135253906,
+    "save_path": "c:\\Physiosis\\models\\tcn_best.pt"
+  },
+  "LSTM": {
+    "architecture": "LSTM",
+    "best_epoch": 1,
+    "best_val_acc": 0.6374269005847953,
+    "train_time_sec": 1.652345700073056,
+    "peak_vram_mb": 123.30810546875,
+    "total_params": 639754,
+    "model_size_mb": 2.4404678344726562,
+    "save_path": "c:\\Physiosis\\models\\lstm_best.pt"
+  },
+  "TRANSFORMER": {
+    "architecture": "TRANSFORMER",
+    "best_epoch": 1,
+    "best_val_acc": 0.6549707602339181,
+    "train_time_sec": 1.6721250000409782,
+    "peak_vram_mb": 70.41650390625,
+    "total_params": 283913,
+    "model_size_mb": 1.0830421447753906,
+    "save_path": "c:\\Physiosis\\models\\transformer_best.pt"
+  }
+}

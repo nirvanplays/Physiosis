@@ -47,6 +47,11 @@ export interface ExerciseRow {
   category: string;
   plane: string;
   difficulty: string;
+  dataset_source?: string;
+  dataset_exercise_code?: string | null;
+  laterality_type?: 'BILATERAL' | 'LEFT_RIGHT' | string;
+  body_region?: string | null;
+  reference_available?: boolean;
   created_at: string;
 }
 

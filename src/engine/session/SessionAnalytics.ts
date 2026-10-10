@@ -6,6 +6,7 @@
 import type { LiveSessionState, PhysiosisSession, RecordedLimitation, SessionEndReason } from './SessionTypes';
 import { getExerciseSuggestion } from '../feedback/SuggestionLibrary';
 import { calculateMovementProgress } from './SessionProgress';
+import { RehabilitationSafetyEngine } from '../safety/RehabilitationSafetyEngine';
 
 /**
  * Construct a finalized PhysiosisSession from a live session state snapshot.
@@ -17,7 +18,8 @@ export function buildPhysiosisSession(
   exerciseId: string = 'shoulder-flexion',
   endedReason: SessionEndReason = 'manual',
   targetAngle: number = 165,
-  patientId?: string
+  patientId?: string,
+  laterality: 'left' | 'right' | 'bilateral' = 'right'
 ): PhysiosisSession | null {
   const reps = state.repHistory;
   if (!reps || reps.length === 0) return null;
@@ -54,10 +56,24 @@ export function buildPhysiosisSession(
 
   const firstRepROM = reps[0]?.peakAngle ?? null;
   const lastRepROM = reps[count - 1]?.peakAngle ?? null;
-  const improvementDegrees =
+  const firstRepPeak = firstRepROM;
+  const lastRepPeak = lastRepROM;
+  const netROMChange =
     firstRepROM !== null && lastRepROM !== null && count > 1
       ? lastRepROM - firstRepROM
       : null;
+  const improvementDegrees = netROMChange;
+
+  let sumImprovements = 0;
+  let improvementCount = 0;
+  for (let i = 1; i < count; i++) {
+    if (reps[i].improvementFromPrevious !== null) {
+      sumImprovements += reps[i].improvementFromPrevious!;
+      improvementCount++;
+    }
+  }
+  const averageRepImprovement =
+    improvementCount > 0 ? Math.round((sumImprovements / improvementCount) * 10) / 10 : null;
 
   // Build limitations array mapped to curated SuggestionLibrary
   const limitations: RecordedLimitation[] = [];
@@ -76,6 +92,34 @@ export function buildPhysiosisSession(
   const latestROM = lastRepROM ?? bestROM;
   const progressResult = calculateMovementProgress(baselineROM, latestROM, targetAngle);
 
+  let sumPosturalScore = 0;
+  let posturalScoreCount = 0;
+  let compensationsCount = 0;
+  const distinctCompensations = new Set<string>();
+
+  for (const r of reps) {
+    if (r.posturalScore !== undefined && r.posturalScore !== null) {
+      sumPosturalScore += r.posturalScore;
+      posturalScoreCount++;
+    }
+    if (r.detectedCompensations && r.detectedCompensations.length > 0) {
+      compensationsCount++;
+      r.detectedCompensations.forEach((c) => distinctCompensations.add(c));
+    }
+  }
+
+  const averagePosturalScore =
+    posturalScoreCount > 0 ? Math.round(sumPosturalScore / posturalScoreCount) : 94;
+
+  const safetyAuditEvents = RehabilitationSafetyEngine.getSessionSafetyAudit();
+  const hasEscalation = safetyAuditEvents.some((e) => e.state === 'ESCALATE');
+  const hasStop = safetyAuditEvents.some((e) => e.state === 'STOP');
+  const safetyNotice = hasEscalation
+    ? 'Clinical escalation triggered: Contact your physiotherapist.'
+    : hasStop
+    ? "Exercise safety stop recorded: Please stop this exercise and follow your clinician's instructions."
+    : undefined;
+
   return {
     id: `session-${startedAt}-${Math.random().toString(36).slice(2, 7)}`,
     startedAt,
@@ -83,6 +127,8 @@ export function buildPhysiosisSession(
     durationSeconds,
     exercise: exerciseName,
     exerciseId,
+    laterality,
+    side: laterality,
     patientId,
     endedReason,
     totalReps: count,
@@ -96,9 +142,18 @@ export function buildPhysiosisSession(
     averageSeverity,
     firstRepROM,
     lastRepROM,
+    firstRepPeak,
+    lastRepPeak,
     improvementDegrees,
+    netROMChange,
+    averageRepImprovement,
     movementProgress: progressResult.progressPercentage,
     trend: progressResult.trend,
+    averagePosturalScore,
+    compensationsCount,
+    detectedCompensationsSummary: Array.from(distinctCompensations),
+    safetyAuditEvents: safetyAuditEvents.length > 0 ? safetyAuditEvents : undefined,
+    safetyNotice,
     reps,
   };
 }

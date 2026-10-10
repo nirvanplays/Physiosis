@@ -31,6 +31,7 @@ import {
   VolumeX,
   Square,
   Loader2,
+  BookOpen,
 } from 'lucide-react';
 import type { ExerciseDefinition } from '../../engine/exercise/ExerciseTypes';
 import type { LiveSessionState, PhysiosisSession } from '../../engine/session/SessionTypes';
@@ -39,6 +40,7 @@ import type {
   AssistantLanguage,
   OllamaConnectionStatus,
   PhysioAssistantContext,
+  KnowledgeCitation,
 } from '../../types/assistant';
 import {
   SUPPORTED_ASSISTANT_LANGUAGES,
@@ -64,6 +66,8 @@ interface ChatMessage {
   isError?: boolean;
   modelUsed?: string;
   language?: AssistantLanguage;
+  sources?: KnowledgeCitation[];
+  grounded?: boolean;
 }
 
 interface PhysioAssistantProps {
@@ -234,6 +238,8 @@ export const PhysioAssistant: React.FC<PhysioAssistantProps> = ({
         isError: !response.success && !isRefusal && !isRedFlag,
         modelUsed: response.model,
         language: assistantLanguage,
+        sources: response.sources,
+        grounded: response.grounded,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -732,6 +738,38 @@ export const PhysioAssistant: React.FC<PhysioAssistantProps> = ({
                       <p className="physio-chat__user-text">{msg.text}</p>
                     ) : (
                       renderFormattedText(msg.text)
+                    )}
+
+                    {/* Verified Clinical Citations (Patch 7: Local RAG) */}
+                    {!isUser && msg.sources && msg.sources.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: '8px',
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          background: 'rgba(0, 229, 255, 0.08)',
+                          border: '1px solid rgba(0, 229, 255, 0.22)',
+                          fontSize: '11px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '3px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                          <BookOpen size={11} />
+                          <span>Verified Clinical Evidence (Local RAG)</span>
+                        </div>
+                        {msg.sources.map((src, idx) => (
+                          <div key={idx} style={{ color: 'var(--text-secondary)', fontSize: '10.5px' }}>
+                            <strong>Source:</strong> {src.source} — <em>"{src.title}"</em> {src.date ? `(${src.date})` : ''}
+                            {src.evidenceLevel && (
+                              <span style={{ marginLeft: '4px', opacity: 0.85, color: '#34D399' }}>
+                                [{src.evidenceLevel}]
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
 
                     {/* Bubble Metadata & TTS Controls */}

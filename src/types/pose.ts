@@ -105,4 +105,11 @@ export interface PoseTrackingStats {
   landmarkCount: number;
   confidence: number;
   poseDetected: boolean;
+  providerType?: 'yolo' | 'mediapipe';
+  inferenceMs?: number;
+  endToEndMs?: number;
+  device?: string;
+  modelName?: string;
+  isCuda?: boolean;
+  isFallback?: boolean;
 }

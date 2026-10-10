@@ -6,9 +6,10 @@
  */
 
 import React from 'react';
-import { Camera, CameraOff, Loader2, AlertCircle, PlayCircle, Clock, RotateCcw } from 'lucide-react';
+import { Camera, CameraOff, Loader2, AlertCircle, PlayCircle, Clock, RotateCcw, ShieldAlert } from 'lucide-react';
 import type { EngineStatus } from '../../types/engine';
 import type { PoseTrackingStats } from '../../types/pose';
+import type { RehabilitationSafetyState } from '../../engine/safety/SafetyTypes';
 import { formatTimerMMSS } from '../../utils/format';
 
 interface LiveFeedCardProps {
@@ -25,6 +26,12 @@ interface LiveFeedCardProps {
   onExitDemoMode?: () => void;
   remainingSeconds?: number;
   isTimerRunning?: boolean;
+  safetyState?: {
+    state: RehabilitationSafetyState;
+    statusMessage?: string;
+    action?: string;
+    escalationNotice?: string;
+  };
 }
 
 export const LiveFeedCard: React.FC<LiveFeedCardProps> = ({
@@ -41,6 +48,7 @@ export const LiveFeedCard: React.FC<LiveFeedCardProps> = ({
   onExitDemoMode,
   remainingSeconds,
   isTimerRunning = false,
+  safetyState,
 }) => {
   const isDemo = mode === 'DEMO';
   const isLive = engineStatus === 'running' && isStreaming && !isDemo;
@@ -256,6 +264,45 @@ export const LiveFeedCard: React.FC<LiveFeedCardProps> = ({
           <div className="pose-searching-badge">
             <span className="pose-searching-dot" />
             <span>Position body in camera view</span>
+          </div>
+        )}
+
+        {/* Safety Intervention Overlay (Patch 6) */}
+        {safetyState && (safetyState.state === 'STOP' || safetyState.state === 'ESCALATE') && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '16px',
+              left: '16px',
+              right: '16px',
+              zIndex: 30,
+              background: safetyState.state === 'ESCALATE' ? 'rgba(183, 28, 28, 0.94)' : 'rgba(230, 81, 0, 0.94)',
+              border: `1.5px solid ${safetyState.state === 'ESCALATE' ? '#FF5252' : '#FFB74D'}`,
+              borderRadius: '8px',
+              padding: '12px 16px',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              backdropFilter: 'blur(6px)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            }}
+          >
+            {safetyState.state === 'ESCALATE' ? (
+              <ShieldAlert size={24} style={{ color: '#FFD7D7', flexShrink: 0 }} />
+            ) : (
+              <AlertCircle size={24} style={{ color: '#FFE0B2', flexShrink: 0 }} />
+            )}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: '13px', letterSpacing: '0.04em' }}>
+                {safetyState.state === 'ESCALATE' ? 'CLINICAL SAFETY ESCALATION' : 'EXERCISE SAFETY STOP'}
+              </div>
+              <div style={{ fontSize: '12px', marginTop: '2px', opacity: 0.95 }}>
+                {safetyState.state === 'ESCALATE'
+                  ? (safetyState.escalationNotice || 'Contact your physiotherapist immediately.')
+                  : "Please stop this exercise and follow your clinician's instructions."}
+              </div>
+            </div>
           </div>
         )}
 

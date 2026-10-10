@@ -115,6 +115,19 @@ export const SessionHistory: React.FC<SessionHistoryProps> = ({
               <div className="session-history-item__left">
                 <div className="session-history-item__title">
                   <span className="session-history-item__exercise">{s.exercise}</span>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      padding: '1px 5px',
+                      borderRadius: '3px',
+                      background: 'rgba(0, 229, 255, 0.1)',
+                      color: 'var(--accent-cyan)',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {s.laterality === 'bilateral' ? 'Bilateral' : (s.laterality || 'Right')}
+                  </span>
                   <span className="session-history-item__date">{formatSessionDate(s.startedAt)}</span>
                 </div>
                 <div className="session-history-item__metrics">

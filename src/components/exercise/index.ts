@@ -1,4 +1,5 @@
 /**
- * index.ts — barrel export for exercise components (placeholder)
+ * index.ts — barrel export for exercise selector & library components
  */
-export {};
+export { ExerciseSelector } from './ExerciseSelector';
+export { ExerciseLibraryModal } from './ExerciseLibraryModal';

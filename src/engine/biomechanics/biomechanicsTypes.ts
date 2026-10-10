@@ -91,4 +91,46 @@ export interface ShoulderFlexionAnalysis {
   confidence: number | null;
   /** Advisory feedback string for the UI. */
   feedback: string;
+  /** Real-time postural integrity and abnormal compensation assessment. */
+  postureResult?: PostureCompensationResult;
+}
+
+// ─── Postural Compensation & Abnormal Movement Detection ─────────────────────
+
+export type AbnormalPostureType =
+  | 'TRUNK_LATERAL_LEAN'
+  | 'SHOULDER_HIKE'
+  | 'THORACIC_KYPHOSIS'
+  | 'TRUNK_HYPEREXTENSION'
+  | 'KNEE_VALGUS'
+  | 'PELVIC_TILT'
+  | 'FORWARD_HEAD';
+
+export type CompensationSeverity = 'MILD' | 'MODERATE' | 'SEVERE';
+
+export interface DetectedCompensation {
+  type: AbnormalPostureType;
+  name: string;
+  severity: CompensationSeverity;
+  measuredValue: number;
+  thresholdValue: number;
+  unit: string;
+  compensatingJoints: string[];
+  clinicalCue: string;
+  correctiveDrillId: string;
+}
+
+export interface PostureCompensationResult {
+  /** Postural integrity score [0–100] based on kinematic symmetry and alignment. */
+  overallPosturalScore: number;
+  /** True if any clinical compensation or abnormal posture exceeds tolerance. */
+  isAbnormalDetected: boolean;
+  /** Primary / most severe detected compensation fault. */
+  primaryFault: DetectedCompensation | null;
+  /** Full list of all active abnormal compensations in the current frame. */
+  compensations: DetectedCompensation[];
+  /** Keys of 3D anatomical joints to highlight with compensation warning shaders. */
+  compensatingJoints: string[];
+  /** Real-time spoken/textual coaching cue for immediate patient guidance. */
+  verbalCorrection: string;
 }

@@ -240,13 +240,15 @@ export function createPersonalizedCorrectionTimeline(patientPeakAngle: number): 
   };
 }
 
+import { getLandmarksForSide } from '../../biomechanics/sideLandmarks';
+
 // ─── Biomechanical Metric Calculation & State Logic ──────────────────────────
 
-export function calculateShoulderFlexionMetric(landmarks: Landmark3D[]): number | null {
-  const shoulder = landmarks[12];
-  const elbow = landmarks[14];
-  const wrist = landmarks[16];
-  const hip = landmarks[24];
+export function calculateShoulderFlexionMetric(
+  landmarks: Landmark3D[],
+  side: 'left' | 'right' | 'bilateral' = 'right'
+): number | null {
+  const { shoulder, elbow, wrist, hip } = getLandmarksForSide(landmarks, side);
 
   if (!shoulder || !hip) return null;
   if ((shoulder.visibility ?? 1) < 0.35 || (hip.visibility ?? 1) < 0.35) return null;
@@ -343,10 +345,10 @@ export function getShoulderFlexionFeedback(
 export function getShoulderFlexionLiveGuide(
   landmarks: Landmark3D[],
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  side: 'left' | 'right' | 'bilateral' = 'right'
 ): LiveGuideOverlay | null {
-  const shoulder = landmarks[12];
-  const hip = landmarks[24];
+  const { shoulder, hip } = getLandmarksForSide(landmarks, side);
   if (!shoulder || !hip) return null;
 
   const sX = shoulder.x * canvasWidth;
@@ -379,13 +381,28 @@ import type { ExerciseDefinition, Landmark3D, LiveGuideOverlay } from '../Exerci
 import { DEMO_PHASES } from '../PoseTypes';
 
 export const shoulderFlexionExercise: ExerciseDefinition = {
-  id: 'shoulder-flexion',
+  id: 'shoulder_flexion',
   name: 'Shoulder Flexion',
   category: 'Upper Body',
+  bodyRegion: 'Shoulder / Upper Limb',
   description:
     'Controlled forward elevation of the arm through the sagittal plane to assess shoulder range of motion.',
   difficulty: 'beginner',
   side: 'right',
+
+  // Dataset Integration Metadata
+  laterality: 'left/right',
+  supportedLateralities: ['left', 'right'],
+  targetMetric: 'Glenohumeral Flexion Angle',
+  unit: 'degrees',
+  poseLandmarks: ['hip', 'shoulder', 'elbow', 'wrist'],
+  analysisMode: 'kinematic_rom',
+  referenceDataAvailable: true,
+  sourceType: 'DATASET-BACKED EXERCISE',
+  isDatasetBacked: true,
+  liveAnalysisAvailable: true,
+  analysisConfidence: 'HIGH',
+
   metricName: 'Shoulder Flexion',
   plane: 'Sagittal Plane',
 
@@ -407,5 +424,6 @@ export const shoulderFlexionExercise: ExerciseDefinition = {
   getFeedback: getShoulderFlexionFeedback,
   getLiveGuide: getShoulderFlexionLiveGuide,
 };
+
 
 

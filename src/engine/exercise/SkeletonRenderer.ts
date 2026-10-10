@@ -25,6 +25,7 @@ import type {
   ExercisePhase,
 } from './PoseTypes';
 import { DEFAULT_BODY_PROPORTIONS } from './PoseTypes';
+import type { JointHighlight } from './ExerciseTypes';
 
 // ─── Rendering options ────────────────────────────────────────────────────────
 
@@ -33,9 +34,38 @@ export interface SkeletonRenderOptions {
   currentAngle?: number;
   targetAngle?: number;
   elapsedMs?: number;
-  highlightJoint?: 'shoulder' | 'knee' | 'hip';
+  highlightJoint?: JointHighlight;
   metricName?: string;
   postureMode?: 'standing' | 'seated' | 'supine';
+  side?: 'left' | 'right' | 'bilateral';
+}
+
+/**
+ * Mirror a reference pose when tracking the left limb.
+ */
+export function mirrorPoseForSide(
+  pose: ReferencePose,
+  side?: 'left' | 'right' | 'bilateral'
+): ReferencePose {
+  if (side !== 'left') return pose;
+
+  return {
+    ...pose,
+    rightShoulderFlexion: pose.leftShoulderFlexion,
+    leftShoulderFlexion: pose.rightShoulderFlexion,
+    rightShoulderAbduction: pose.leftShoulderAbduction,
+    leftShoulderAbduction: pose.rightShoulderAbduction,
+    rightElbowFlexion: pose.leftElbowFlexion,
+    leftElbowFlexion: pose.rightElbowFlexion,
+    rightShoulderElevation: pose.leftShoulderElevation,
+    leftShoulderElevation: pose.rightShoulderElevation,
+    rightHipFlexion: pose.leftHipFlexion,
+    leftHipFlexion: pose.rightHipFlexion,
+    rightKneeFlexion: pose.leftKneeFlexion,
+    leftKneeFlexion: pose.rightKneeFlexion,
+    trunkSideFlexion: -pose.trunkSideFlexion,
+    headRotation: -pose.headRotation,
+  };
 }
 
 // ─── Proportional constants ───────────────────────────────────────────────────
@@ -356,9 +386,8 @@ export class SkeletonRenderer {
     bg.addColorStop(0, 'hsl(218, 16%, 12%)');
     bg.addColorStop(1, 'hsl(220, 16%, 7%)');
     ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
-
-    const joints = computeJointPositions(pose, W, H, proportions);
+    const effectivePose = mirrorPoseForSide(pose, options.side);
+    const joints = computeJointPositions(effectivePose, W, H, proportions);
     const boneBase = (H / THICKNESS_BASE) * 9;
 
     // Ground line
@@ -480,7 +509,7 @@ export class SkeletonRenderer {
         : joints.rightShoulder;
 
     // 12. Angle Arc
-    this.drawExerciseAngleArc(ctx, joints, displayedAngle, H, phase, highlightJoint);
+    this.drawExerciseAngleArc(ctx, joints, displayedAngle, H, phase, highlightJoint, options.side);
 
     // 13. Phase-specific annotations
     if (phase === 'LIMITATION') {
@@ -618,20 +647,34 @@ export class SkeletonRenderer {
     displayedAngle: number,
     canvasHeight: number,
     phase: ExercisePhase,
-    highlightJoint: 'shoulder' | 'knee' | 'hip',
+    highlightJoint?: JointHighlight,
+    side?: 'left' | 'right' | 'bilateral',
   ): void {
-    let origin = joints.rightShoulder;
-    let v1 = { x: joints.rightHip.x - joints.rightShoulder.x, y: joints.rightHip.y - joints.rightShoulder.y };
-    let v2 = { x: joints.rightElbow.x - joints.rightShoulder.x, y: joints.rightElbow.y - joints.rightShoulder.y };
+    const isLeft = side === 'left';
+    let origin = isLeft ? joints.leftShoulder : joints.rightShoulder;
+    let v1 = isLeft
+      ? { x: joints.leftHip.x - joints.leftShoulder.x, y: joints.leftHip.y - joints.leftShoulder.y }
+      : { x: joints.rightHip.x - joints.rightShoulder.x, y: joints.rightHip.y - joints.rightShoulder.y };
+    let v2 = isLeft
+      ? { x: joints.leftElbow.x - joints.leftShoulder.x, y: joints.leftElbow.y - joints.leftShoulder.y }
+      : { x: joints.rightElbow.x - joints.rightShoulder.x, y: joints.rightElbow.y - joints.rightShoulder.y };
 
     if (highlightJoint === 'knee') {
-      origin = joints.rightKnee;
-      v1 = { x: joints.rightHip.x - joints.rightKnee.x, y: joints.rightHip.y - joints.rightKnee.y };
-      v2 = { x: joints.rightAnkle.x - joints.rightKnee.x, y: joints.rightAnkle.y - joints.rightKnee.y };
+      origin = isLeft ? joints.leftKnee : joints.rightKnee;
+      v1 = isLeft
+        ? { x: joints.leftHip.x - joints.leftKnee.x, y: joints.leftHip.y - joints.leftKnee.y }
+        : { x: joints.rightHip.x - joints.rightKnee.x, y: joints.rightHip.y - joints.rightKnee.y };
+      v2 = isLeft
+        ? { x: joints.leftAnkle.x - joints.leftKnee.x, y: joints.leftAnkle.y - joints.leftKnee.y }
+        : { x: joints.rightAnkle.x - joints.rightKnee.x, y: joints.rightAnkle.y - joints.rightKnee.y };
     } else if (highlightJoint === 'hip') {
-      origin = joints.rightHip;
-      v1 = { x: joints.leftHip.x - joints.leftAnkle.x, y: 0 };
-      v2 = { x: joints.rightKnee.x - joints.rightHip.x, y: joints.rightKnee.y - joints.rightHip.y };
+      origin = isLeft ? joints.leftHip : joints.rightHip;
+      v1 = isLeft
+        ? { x: joints.rightHip.x - joints.rightAnkle.x, y: 0 }
+        : { x: joints.leftHip.x - joints.leftAnkle.x, y: 0 };
+      v2 = isLeft
+        ? { x: joints.leftKnee.x - joints.leftHip.x, y: joints.leftKnee.y - joints.leftHip.y }
+        : { x: joints.rightKnee.x - joints.rightHip.x, y: joints.rightKnee.y - joints.rightHip.y };
     }
 
     const a1 = Math.atan2(v1.y, v1.x);

@@ -11,6 +11,7 @@ import { clamp, lerp } from '../../utils/math';
 import type { ExerciseDefinition } from '../exercise/ExerciseTypes';
 import { getDefaultExercise } from '../exercise/ExerciseRegistry';
 import type { MovementState, ShoulderFlexionAnalysis } from './biomechanicsTypes';
+import { postureCompensationEngine } from './PostureCompensationEngine';
 
 const ANGLE_SMOOTH_ALPHA = 0.32;
 
@@ -51,7 +52,7 @@ export class ExerciseKinematicsTracker {
       return this.publishWaiting();
     }
 
-    const rawAngle = this.exercise.calculateMetric(landmarks);
+    const rawAngle = this.exercise.calculateMetric(landmarks, this.exercise.side);
     if (rawAngle === null) {
       return this.publishWaiting();
     }
@@ -108,11 +109,24 @@ export class ExerciseKinematicsTracker {
       landmarks.reduce((acc, curr) => acc + (curr.visibility ?? 1), 0) /
       landmarks.length;
 
-    const feedback = this.exercise.getFeedback(
+    const baseFeedback = this.exercise.getFeedback(
       this.currentState,
       angle,
       this.lastRepPeak
     );
+
+    // Analyze postural integrity & abnormal compensations
+    const postureResult = postureCompensationEngine.analyze({
+      landmarks,
+      exerciseId: this.exercise.id,
+      side: this.exercise.side,
+      currentAngle: angle,
+    });
+
+    const feedback =
+      postureResult.isAbnormalDetected && postureResult.primaryFault
+        ? `${postureResult.primaryFault.clinicalCue} (${baseFeedback})`
+        : baseFeedback;
 
     this.snapshot = {
       angle: Math.round(angle),
@@ -126,6 +140,7 @@ export class ExerciseKinematicsTracker {
       lastRepPeak: this.lastRepPeak,
       confidence: Math.round(avgConf * 100),
       feedback,
+      postureResult,
     };
 
     return this.snapshot;

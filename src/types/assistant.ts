@@ -44,10 +44,14 @@ export interface PhysioAssistantContext {
     latestROM?: number;
     overallProgress?: string;
   };
+  patientState?: import('../engine/state/PatientRehabilitationState').PatientRehabilitationState;
 }
 
 /** Alias for backward-compatibility */
 export type PhysioAssistantSessionContext = PhysioAssistantContext;
+
+export type { KnowledgeCitation } from '../engine/knowledge/KnowledgeTypes';
+import type { KnowledgeCitation } from '../engine/knowledge/KnowledgeTypes';
 
 export interface PhysioAssistantRequest {
   message: string;
@@ -64,6 +68,8 @@ export interface PhysioAssistantResponse {
   isOutOfDomain?: boolean;
   category?: string;
   error?: string;
+  sources?: KnowledgeCitation[];
+  grounded?: boolean;
 }
 
 export interface OllamaConnectionStatus {
