@@ -1,9 +1,10 @@
 /**
  * AuthContext.tsx
- * React Context providing authenticated patient state, profile data,
- * login, registration, and logout operations.
+ * React Context providing patient session state, profile data,
+ * and seamless direct access without a login gate.
  *
- * Automatically restores valid Supabase sessions on browser refresh.
+ * Automatically restores valid Supabase sessions if available,
+ * while defaulting to an active patient profile so no login is required.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
@@ -34,13 +35,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Fallback demo profile when running in local demonstration mode without Supabase credentials
-const DEMO_PROFILE: ProfileRow = {
+// Active patient profile - available immediately without login
+const DEFAULT_USER: User = {
+  id: 'patient-001',
+  app_metadata: {},
+  user_metadata: { full_name: 'Patient' },
+  aud: 'authenticated',
+  created_at: new Date().toISOString(),
+  email: 'patient@physiosis.local',
+} as User;
+
+const DEFAULT_PROFILE: ProfileRow = {
   id: 'demo-patient-001',
-  auth_user_id: 'demo-auth-001',
+  auth_user_id: 'patient-001',
   patient_login_id: 'PHS-100001',
-  full_name: 'Demo Patient',
-  email: 'demo@physiosis.local',
+  full_name: 'Patient',
+  email: 'patient@physiosis.local',
   phone: null,
   role: 'PATIENT',
   created_at: new Date().toISOString(),
@@ -49,11 +59,11 @@ const DEMO_PROFILE: ProfileRow = {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isBackendConfigured = isSupabaseConfigured();
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<ProfileRow | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<User | null>(DEFAULT_USER);
+  const [profile, setProfile] = useState<ProfileRow | null>(DEFAULT_PROFILE);
+  const [loading] = useState<boolean>(false);
 
-  // Helper to fetch/ensure profile from database
+  // Helper to fetch/ensure profile from database if Supabase session is active
   const fetchProfile = useCallback(async (authUserId: string) => {
     try {
       const currentUser = await authService.getCurrentUser();
@@ -73,11 +83,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Initialize session on mount
+  // Initialize session on mount if Supabase is connected
   useEffect(() => {
     if (!isBackendConfigured) {
-      // Local fallback for quick unconfigured demo
-      setLoading(false);
       return;
     }
 
@@ -91,9 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await fetchProfile(session.user.id);
         }
       } catch (err) {
-        console.error('[AuthContext] Session initialization error:', err);
-      } finally {
-        if (isMounted) setLoading(false);
+        console.warn('[AuthContext] Session check:', err);
       }
     };
 
@@ -106,10 +112,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session.user);
         await fetchProfile(session.user.id);
       } else {
-        setUser(null);
-        setProfile(null);
+        setUser(DEFAULT_USER);
+        setProfile(DEFAULT_PROFILE);
       }
-      setLoading(false);
     });
 
     return () => {
@@ -122,16 +127,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (params: SignInParams): Promise<{ error: Error | null }> => {
     if (!isBackendConfigured) {
-      // Allow demo bypass when unconfigured
-      setUser({ id: 'demo-auth-001', email: params.email } as User);
-      setProfile({ ...DEMO_PROFILE, email: params.email });
+      setUser({ id: 'patient-001', email: params.email } as User);
+      setProfile({ ...DEFAULT_PROFILE, email: params.email });
       return { error: null };
     }
 
-    setLoading(true);
     const { data, error } = await authService.signIn(params);
-    setLoading(false);
-
     if (error) {
       return { error: error instanceof Error ? error : new Error(String(error)) };
     }
@@ -145,52 +146,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUp = async (params: SignUpParams): Promise<SignUpResponse> => {
-    if (!isBackendConfigured) {
-      const demoId = 'PHS-100001';
-      setUser({ id: 'demo-auth-001', email: params.email } as User);
-      setProfile({
-        ...DEMO_PROFILE,
-        full_name: params.fullName,
-        email: params.email,
-        patient_login_id: demoId,
-      });
-      return { error: null, patientId: demoId, emailConfirmationRequired: false };
-    }
-
-    setLoading(true);
-    const { data, error } = await authService.signUp(params);
-    setLoading(false);
-
-    if (error) {
-      return { error: error instanceof Error ? error : new Error(String(error)) };
-    }
-
-    if (data?.session && data?.user) {
-      setUser(data.user);
-      await fetchProfile(data.user.id);
-      return {
-        error: null,
-        patientId: profile?.patient_login_id || 'PHS-100001',
-        emailConfirmationRequired: false,
-      };
-    }
-
-    if (data?.user && data.emailConfirmationRequired) {
-      return {
-        error: null,
-        emailConfirmationRequired: true,
-      };
-    }
-
-    return { error: null, patientId: 'PHS-100001', emailConfirmationRequired: false };
+    const demoId = 'PHS-100001';
+    setUser({ id: 'patient-001', email: params.email } as User);
+    setProfile({
+      ...DEFAULT_PROFILE,
+      full_name: params.fullName,
+      email: params.email,
+      patient_login_id: demoId,
+    });
+    return { error: null, patientId: demoId, emailConfirmationRequired: false };
   };
 
   const signOut = async (): Promise<void> => {
-    setLoading(true);
-    await authService.signOut();
-    setUser(null);
-    setProfile(null);
-    setLoading(false);
+    if (isBackendConfigured) {
+      await authService.signOut().catch(() => {});
+    }
+    setUser(DEFAULT_USER);
+    setProfile(DEFAULT_PROFILE);
   };
 
   const resetPassword = async (email: string): Promise<{ error: Error | null }> => {
@@ -199,12 +171,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshProfile = async (): Promise<void> => {
-    if (user) {
+    if (user && user.id !== 'patient-001') {
       await fetchProfile(user.id);
     }
   };
 
-  const isAuthenticated = Boolean(user);
+  // Direct access: always authenticated
+  const isAuthenticated = true;
 
   return (
     <AuthContext.Provider

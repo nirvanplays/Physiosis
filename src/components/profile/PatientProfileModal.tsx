@@ -8,13 +8,10 @@
  *   - Patient Login ID (e.g. PHS-100001)
  *   - Role
  *   - Registration Date
- *   - Logout button
- *
- * Security: Does not display password or allow arbitrary database modification.
  */
 
 import React from 'react';
-import { X, User, Mail, Shield, Calendar, LogOut, FileText } from 'lucide-react';
+import { X, User, Mail, Shield, Calendar, FileText } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface PatientProfileModalProps {
@@ -26,12 +23,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
   onClose,
   onOpenHistory,
 }) => {
-  const { profile, user, signOut } = useAuth();
-
-  const handleLogout = async () => {
-    onClose();
-    await signOut();
-  };
+  const { profile, user } = useAuth();
 
   const fullName = profile?.full_name || user?.user_metadata?.full_name || 'Patient';
   const email = profile?.email || user?.email || '—';
@@ -105,8 +97,8 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
           </div>
 
           {/* Quick Actions */}
-          <div className="profile-quick-actions">
-            {onOpenHistory && (
+          {onOpenHistory && (
+            <div className="profile-quick-actions">
               <button
                 type="button"
                 className="btn btn--secondary flex items-center gap-2 w-full"
@@ -118,17 +110,8 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                 <FileText size={14} />
                 <span>View Previous Session History</span>
               </button>
-            )}
-
-            <button
-              type="button"
-              className="btn btn--danger flex items-center justify-center gap-2 w-full"
-              onClick={handleLogout}
-            >
-              <LogOut size={14} />
-              <span>Sign Out of Physiosis</span>
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

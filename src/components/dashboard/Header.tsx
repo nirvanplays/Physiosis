@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { Activity, History, Square, User, LogOut, ChevronDown, Grid } from 'lucide-react';
+import { Activity, History, Square, User, ChevronDown, Grid } from 'lucide-react';
 import { EngineStatusBadge } from './EngineStatusBadge';
 import type { EngineStatus } from '../../types/engine';
 import { getExercise, getDefaultExercise } from '../../engine/exercise/ExerciseRegistry';
@@ -50,7 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
   dimensionMode = '3D',
   onToggleDimension,
 }) => {
-  const { profile, user, signOut } = useAuth();
+  const { profile, user } = useAuth();
   const activeExercise = getExercise(selectedExerciseId) ?? getDefaultExercise();
 
   const patientName = profile?.full_name || user?.user_metadata?.full_name || 'Patient';
@@ -145,7 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
         )}
       </div>
 
-      {/* ── Right Actions: Session Status, Patient ID, History, Logout ── */}
+      {/* ── Right Actions: Session Status, Patient ID, History ── */}
       <div className="header__actions">
         {/* Engine Status Badge */}
         <EngineStatusBadge status={engineStatus} mode={mode} />
@@ -191,16 +191,6 @@ export const Header: React.FC<HeaderProps> = ({
           {savedSessionsCount > 0 && (
             <span className="btn-header-history__badge">{savedSessionsCount}</span>
           )}
-        </button>
-
-        {/* Logout Quick Button */}
-        <button
-          type="button"
-          className="btn-header-logout"
-          onClick={signOut}
-          title="Sign Out"
-        >
-          <LogOut size={14} />
         </button>
       </div>
     </header>
